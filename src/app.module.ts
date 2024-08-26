@@ -9,6 +9,7 @@ import { User } from './entities/user.entity';
 import { Profile } from './entities/profile.entity';
 import { CloudinaryService } from './cloudinary/cloudinary.service';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { RedisModule } from './redis/redis.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -31,6 +32,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     UserModule,
     AuthModule,
     CloudinaryModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService],

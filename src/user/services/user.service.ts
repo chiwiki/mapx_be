@@ -1,3 +1,4 @@
+import { SussessResponse } from './../../core/success';
 import { UpdateProfileDto } from './../dtos/update-profile.dto';
 import { Profile } from './../../entities/profile.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -44,7 +45,7 @@ export class UserService {
     }
 
     const saveUser = await this.userRepository.save(findUser);
-    return saveUser;
+    return new SussessResponse('Update profile successfully!', 200, saveUser);
   }
   async findUserByUsername(username: string) {
     const findUser = await this.userRepository.findOne({
@@ -52,6 +53,6 @@ export class UserService {
       where: { username: username },
     });
     if (!findUser) throw new BadRequestException('Username not found');
-    return findUser;
+    return new SussessResponse('Get user by username', 200, findUser.profile);
   }
 }

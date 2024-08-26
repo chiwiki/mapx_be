@@ -1,9 +1,11 @@
+import { CreatedResponse, SussessResponse } from './../../core/success';
 import { ValidatePasswordPipe } from './../pipes/validate-password.pipe';
 import {
   Body,
   Controller,
   Patch,
   Post,
+  Req,
   Res,
   UseGuards,
   UseInterceptors,
@@ -11,7 +13,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AuthGuard } from 'src/utils/guards/auth.guard';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -22,10 +24,15 @@ import { UserMiddle } from 'src/utils/decoraters/user.decorater';
 import { UpdateAccountDto } from '../dto/update-account.dto';
 import { User } from 'src/entities/user.entity';
 import { UserInterceptor } from 'src/utils/interceptors/user.interceptor';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import { Redis } from 'ioredis';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    @InjectRedis() private readonly redis: Redis,
+  ) {}
   @Post('register')
   @UsePipes(new ValidationPipe())
   async register(
@@ -34,21 +41,38 @@ export class AuthController {
   ): Promise<void> {
     console.log({ createUserDto });
     const authResponse = await this.authService.register(createUserDto, res);
-    res.json(authResponse);
+    const data = new CreatedResponse(
+      'Create user successfully!',
+      201,
+      authResponse,
+    ).send();
+    console.log({ data });
+    res.json(data);
   }
 
   @Post('login')
   @UsePipes(new ValidationPipe())
   async login(@Body() loginDto: LoginDto, @Res() res: Response): Promise<void> {
     const authResponse = await this.authService.login(loginDto, res);
-    res.json(authResponse);
+    const data = new SussessResponse(
+      'Login successfully!',
+      200,
+      authResponse,
+    ).send();
+
+    res.json(data);
   }
 
   @Post('logout')
   @UseGuards(AuthGuard)
-  logout(@Res() res: Response) {
-    res.clearCookie('refreshToken');
-    return res.send({ message: 'Logged out successfully' });
+  async logout(@Req() request: Request, @Res() res: Response) {
+    const user_id = request['user'].id;
+    console.log({ user_id });
+
+    const result = await this.redis.del(`user:${user_id}:refresh_token`);
+    console.log({ result });
+    const data = new SussessResponse('Logout successfully!', 200).send();
+    return res.status(200).json(data);
   }
 
   @Patch('change-password')
@@ -57,7 +81,7 @@ export class AuthController {
   async changePassword(
     @Body(ValidatePasswordPipe) changePasswordDto: ChangePasswordDto,
     @UserMiddle() user: { id: string },
-  ): Promise<Record<string, string>> {
+  ) {
     return this.authService.changePassword(changePasswordDto, user);
   }
 
@@ -68,7 +92,7 @@ export class AuthController {
   async updateAccount(
     @Body() updateAccount: UpdateAccountDto,
     @UserMiddle() user: { id: string },
-  ): Promise<User> {
+  ) {
     return this.authService.updateAccount(updateAccount, user);
   }
 }

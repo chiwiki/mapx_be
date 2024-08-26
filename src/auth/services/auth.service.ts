@@ -1,6 +1,12 @@
+import { SussessResponse } from './../../core/success';
+import { InjectRedis } from '@nestjs-modules/ioredis';
 import { UpdateAccountDto } from './../dto/update-account.dto';
 import { ChangePasswordDto } from './../dto/change-password.dto';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -11,6 +17,7 @@ import { TokenSender } from 'src/utils/sendToken';
 import { CreateUserParams } from '../type/create-user.type';
 import { User } from 'src/entities/user.entity';
 import { LoginDto } from '../dto/login.dto';
+import { Redis } from 'ioredis';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +25,7 @@ export class AuthService {
     @InjectRepository(User) private userRepository: Repository<User>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
   async register(createUserDto: CreateUserParams, res: Response) {
     const { username, email, password } = createUserDto;
@@ -44,7 +52,14 @@ export class AuthService {
 
     const newUser = this.userRepository.create(user);
     const savedUser = await this.userRepository.save(newUser);
-    const tokenSender = new TokenSender(this.jwtService, this.configService);
+    if (!savedUser) {
+      throw new InternalServerErrorException('Internal error');
+    }
+    const tokenSender = new TokenSender(
+      this.jwtService,
+      this.configService,
+      this.redis,
+    );
     return tokenSender.sendToken(savedUser, res);
   }
 
@@ -66,7 +81,11 @@ export class AuthService {
       throw new BadRequestException({ message: 'Credential invalid' });
     }
 
-    const tokenSender = new TokenSender(this.jwtService, this.configService);
+    const tokenSender = new TokenSender(
+      this.jwtService,
+      this.configService,
+      this.redis,
+    );
     return tokenSender.sendToken(findUser, res);
   }
   async changePassword(
@@ -82,9 +101,7 @@ export class AuthService {
     }
     const hashedPassword = await bcrypt.hash(new_password, 10);
     await this.userRepository.update(id, { password: hashedPassword });
-    return {
-      message: 'Change password successfully!',
-    };
+    return new SussessResponse('Change password successfully!', 200);
   }
   async updateAccount(updateAccount: UpdateAccountDto, user: { id: string }) {
     const { id } = user;
@@ -104,6 +121,10 @@ export class AuthService {
 
     await this.userRepository.update(id, updateAccount);
     const updatedUser = await this.userRepository.findOne({ where: { id } });
-    return updatedUser;
+    return new SussessResponse(
+      'Update account successfylly!',
+      200,
+      updatedUser,
+    );
   }
 }
